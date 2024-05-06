@@ -97,9 +97,11 @@ type relyingParty struct {
 	oauth2Only                  bool
 	pkce                        bool
 	useSigningAlgsFromDiscovery bool
+	usePKCEFromDiscovery        bool
 
-	httpClient    *http.Client
-	cookieHandler *httphelper.CookieHandler
+	httpClient       *http.Client
+	cookieHandler    *httphelper.CookieHandler
+	tmpCookieHandler *httphelper.CookieHandler
 
 	oauthAuthStyle oauth2.AuthStyle
 
@@ -242,6 +244,12 @@ func NewRelyingPartyOIDC(ctx context.Context, issuer, clientID, clientSecret, re
 	if rp.useSigningAlgsFromDiscovery {
 		rp.verifierOpts = append(rp.verifierOpts, WithSupportedSigningAlgorithms(discoveryConfiguration.IDTokenSigningAlgValuesSupported...))
 	}
+	if rp.usePKCEFromDiscovery {
+		if len(discoveryConfiguration.CodeChallengeMethodsSupported) != 0 {
+			rp.pkce = true
+			rp.cookieHandler = rp.tmpCookieHandler
+		}
+	}
 	endpoints := GetEndpoints(discoveryConfiguration)
 	rp.oauthConfig.Endpoint = endpoints.Endpoint
 	rp.endpoints = endpoints
@@ -282,6 +290,16 @@ func WithPKCE(cookieHandler *httphelper.CookieHandler) Option {
 	return func(rp *relyingParty) error {
 		rp.pkce = true
 		rp.cookieHandler = cookieHandler
+		return nil
+	}
+}
+
+// WithPKCEFromDiscovery enables Oauth2 Code Challenge if support is found in the discovery response from the OP.
+// Passing this option to a Oauth2-only RP will result in an error, as there is no discovery call.
+func WithPKCEFromDiscovery(cookieHandler *httphelper.CookieHandler) Option {
+	return func(rp *relyingParty) error {
+		rp.usePKCEFromDiscovery = true
+		rp.tmpCookieHandler = cookieHandler
 		return nil
 	}
 }
